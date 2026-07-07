@@ -1,0 +1,19 @@
+[project]
+name = "nifi-user-management"
+version = "0.1.0"
+description = "Script designed to enable easier, and automated management of users for all supported authentication types\nOnly supported authentication method with the nifi-api is mTLS"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "cryptography>=49.0.0",
+    "pydantic>=2.13.4",
+    "pydantic-settings>=2.14.2",
+    "requests>=2.34.2",
+]
+
+[project.scripts]
+mycli = "nifi_user_management.main:cli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

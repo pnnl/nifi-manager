@@ -1,0 +1,58 @@
+{
+  "users": [
+    {
+      "identity": "CN=nifi-user-manager, OU=NIFI"
+    },
+    {
+      "identity": "Timothy J Cain"
+    },
+    {
+      "identity": "Jane Smith"
+    }
+  ],
+  "groups": [
+    {
+      "identity": "administrators",
+      "users": ["Timothy J Cain"]
+    },
+    {
+      "identity": "developers",
+      "users": []
+    },
+    {
+      "identity": "users",
+      "users": []
+    },
+    {
+      "identity": "maintainers",
+      "users": []
+    }
+  ],
+  "policies": [
+    {"resource": "flow", "action": "read", "users": ["Jane Smith"], "groups": ["administrators"]},
+    {"resource": "tenants", "action": "read", "users": ["Jane Smith"], "groups": ["administrators"]},
+    {"resource": "tenants", "action": "write", "users": ["Jane Smith"], "groups": ["administrators"]},
+    {"resource": "policies", "action": "read", "users": ["Jane Smith"], "groups": ["administrators"]},
+    {"resource": "policies", "action": "write", "users": ["Jane Smith"], "groups": ["administrators"]},
+    {"resource": "controller", "action": "read", "users": ["Jane Smith"], "groups": ["administrators"]},
+    {"resource": "controller", "action": "write", "users": ["Jane Smith"], "groups": ["administrators"]},
+    {"resource": "proxy", "action": "write", "users": ["Jane Smith"], "groups": ["administrators"]},
+    {"resource": "restricted-components", "action": "write", "users": ["Jane Smith"], "groups": ["administrators"]},
+    {"resource": "restricted-components/access-environment-credentials", "action": "write", "users": ["Jane Smith"], "groups": ["administrators"]},
+    {"resource": "restricted-components/access-keytab", "action": "write", "users": ["Jane Smith"], "groups": ["administrators"]},
+    {"resource": "restricted-components/access-ticket-cache", "action": "write", "users": ["Jane Smith"], "groups": ["administrators"]},
+    {"resource": "restricted-components/execute-code", "action": "write", "users": ["Jane Smith"], "groups": ["administrators"]},
+    {"resource": "restricted-components/export-nifi-details", "action": "write", "users": ["Jane Smith"], "groups": ["administrators"]},
+    {"resource": "restricted-components/read-distributed-filesystem", "action": "write", "users": ["Jane Smith"], "groups": ["administrators"]},
+    {"resource": "restricted-components/read-filesystem", "action": "write", "users": ["Jane Smith"], "groups": ["administrators"]},
+    {"resource": "restricted-components/reference-remote-resources", "action": "write", "users": ["Jane Smith"], "groups": ["administrators"]},
+    {"resource": "restricted-components/write-distributed-filesystem", "action": "write", "users": ["Jane Smith"], "groups": ["administrators"]},
+    {"resource": "restricted-components/write-filesystem", "action": "write", "users": ["Jane Smith"], "groups": ["administrators"]},
+    {"resource": "site-to-site", "action": "read", "users": ["Jane Smith"], "groups": ["administrators"]},
+    {"resource": "system", "action": "read", "users": ["Jane Smith"], "groups": ["administrators"]},
+    {"resource": "counters", "action": "read", "users": ["Jane Smith"], "groups": ["administrators"]},
+    {"resource": "counters", "action": "write", "users": ["Jane Smith"], "groups": ["administrators"]},
+    {"resource": "process-groups/{root_pg_id}", "action": "read", "users": ["Jane Smith"], "groups": ["administrators"]},
+    {"resource": "process-groups/{root_pg_id}", "action": "write", "users": ["Jane Smith"], "groups": ["administrators"]}
+  ]
+}
