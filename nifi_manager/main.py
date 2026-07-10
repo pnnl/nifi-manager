@@ -59,7 +59,7 @@ class NoCurrentUser(Exception):
     pass
 
 
-class NifiUserManager:
+class NifiManager:
     def __init__(self, config: Config, logger: logging.Logger):
         self.config = config
         self.logger = logger
@@ -457,7 +457,7 @@ if __name__ == "__main__":
         logging.WARNING
     )  # urllib3 debug logging is too noisy
 
-    nifi_user_manager = NifiUserManager(config, logger)
+    nifi_user_manager = NifiManager(config, logger)
 
     changes, failures = nifi_user_manager.run()
     if len(failures) != 0:
