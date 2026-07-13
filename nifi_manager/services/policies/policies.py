@@ -43,7 +43,7 @@ def get_existing_policies(root_pg_id: str) -> Dict[str, NifiPolicy]:
 
     policies = {}
     for policy in all_policies:
-        policies[f"{policy.action}{policy.resource}"] = policy
+        policies[f"{policy.action}/{policy.resource[1:]}"] = policy
 
     return policies
 
@@ -119,45 +119,43 @@ def del_non_acl_policies(
             changes.append(change)
         except Exception as e:
             logger.warning(e)
-            raise
+            failures.append(e)
 
     return changes, failures
 
 
 def _get_all_policies(root_pg_id: str) -> FrozenSet[NifiPolicy]:
     policy_resources = [
-        "read/flow",
-        "read/tenants",
-        "write/tenants",
-        "read/policies",
-        "write/policies",
-        "read/controller",
-        "write/controller",
-        "write/proxy",
-        "write/restricted-components",
-        "write/restricted-components/access-environment-credentials",
-        "write/restricted-components/access-keytab",
-        "write/restricted-components/access-ticket-cache",
-        "write/restricted-components/execute-code",
-        "write/restricted-components/export-nifi-details",
-        "write/restricted-components/read-distributed-filesystem",
-        "write/restricted-components/read-filesystem",
-        "write/restricted-components/reference-remote-resources",
-        "write/restricted-components/write-distributed-filesystem",
-        "write/restricted-components/write-filesystem",
-        "read/provenance",
-        "read/site-to-site",
-        "read/system",
-        "read/counters",
-        "write/counters",
-        f"read/process-groups/{root_pg_id}",
-        f"write/process-groups/{root_pg_id}",
+        ("read", "flow"),
+        ("read", "tenants"),
+        ("write", "tenants"),
+        ("read", "policies"),
+        ("write", "policies"),
+        ("read", "controller"),
+        ("write", "controller"),
+        ("write", "proxy"),
+        ("write", "restricted-components"),
+        ("write", "restricted-components/access-environment-credentials"),
+        ("write", "restricted-components/access-keytab"),
+        ("write", "restricted-components/access-ticket-cache"),
+        ("write", "restricted-components/execute-code"),
+        ("write", "restricted-components/export-nifi-details"),
+        ("write", "restricted-components/read-distributed-filesystem"),
+        ("write", "restricted-components/read-filesystem"),
+        ("write", "restricted-components/reference-remote-resources"),
+        ("write", "restricted-components/write-distributed-filesystem"),
+        ("write", "restricted-components/write-filesystem"),
+        ("read", "provenance"),
+        ("read", "site-to-site"),
+        ("read", "system"),
+        ("read", "counters"),
+        ("write", "counters"),
+        ("read", f"process-groups/{root_pg_id}"),
+        ("write", f"process-groups/{root_pg_id}"),
     ]
 
     policies = []
-    for policy_resource in policy_resources:
-        split = policy_resource.split("/", maxsplit=1)
-        action, resource = split[0], split[1]
+    for action, resource in policy_resources:
         try:
             policy = _get_policy(action, resource)
             policies.append(policy)
@@ -192,7 +190,7 @@ def _create_policy(
             "resource": f"/{resource}",
             "action": action,
             "users": NifiMemberSet.dump_python(users, mode="json"),
-            "userPolicys": NifiMemberSet.dump_python(groups, mode="json"),
+            "userGroups": NifiMemberSet.dump_python(groups, mode="json"),
         },
     }
     response = post(URL, CONFIG, payload)

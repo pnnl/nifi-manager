@@ -84,7 +84,7 @@ class NifiManager:
         try:
             self.current_user: NifiUser = self.users[self.current_username]
         except KeyError:
-            raise NoCurrentUser(f"User {self.current_username}")
+            raise NoCurrentUser(f"User {self.current_username} not found")
         self.cluster_users: FrozenSet[str] = self._get_cluster_users()
         self.logger.debug(
             f"found cluster users: {[user for user in self.cluster_users]}"

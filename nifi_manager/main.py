@@ -6,7 +6,7 @@ if __name__ == "__main__":
     config = get_config()
     logging.basicConfig(
         level=config.log_level,
-        format=f"%(asctime)s - %(name)-17s - %(levelname)-8s - {"DRY_RUN - " if config.dry_run else ""}%(message)s",
+        format=f"%(asctime)s - %(name)-17s - %(levelname)-8s - {'DRY_RUN - ' if config.dry_run else ''}%(message)s",
     )
     logger = logging.getLogger("Nifi User Manager")
     logging.getLogger("urllib3").setLevel(
