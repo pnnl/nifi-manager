@@ -232,7 +232,7 @@ def _update_policy(
             raise PolicyNotCreated(
                 f"policy {policy.action} on {policy.resource} could not be created: {response.text}, status_code: {response.status_code}"
             )
-        return policy
+        return updated
     elif response.status_code == 404:
         raise PolicyNotExists(
             f"policy {policy.action} on {policy.resource} does not exist"
