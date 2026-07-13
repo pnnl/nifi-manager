@@ -1,15 +1,17 @@
 # Functions
-from .groups import get_all_groups, get_group, update_group, delete_group, create_group
+from .groups import (
+    sync_group,
+    get_existing_groups,
+    del_non_acl_groups,
+)
 
 # Exceptions
 from .groups import GroupNotCreated, GroupExists, GroupNotDeleted, GroupNotUpdated
 
 __all__ = [
-    "get_all_groups",
-    "get_group",
-    "update_group",
-    "delete_group",
-    "create_group",
+    "sync_group",
+    "get_existing_groups",
+    "del_non_acl_groups",
     "GroupNotCreated",
     "GroupExists",
     "GroupNotDeleted",

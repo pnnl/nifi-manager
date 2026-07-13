@@ -1,14 +1,13 @@
 # Functions
-from .users import get_all_users, get_user, delete_user, create_user
+from .users import sync_user, get_existing_users, del_non_acl_users
 
 # Exceptions
 from .users import UserNotCreated, UserExists, UserNotDeleted
 
 __all__ = [
-    "get_all_users",
-    "get_user",
-    "delete_user",
-    "create_user",
+    "sync_user",
+    "get_existing_users",
+    "del_non_acl_users",
     "UserNotCreated",
     "UserExists",
     "UserNotDeleted",

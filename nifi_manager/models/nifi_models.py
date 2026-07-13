@@ -8,7 +8,7 @@ from pydantic import (
     ConfigDict,
     TypeAdapter,
 )
-from typing import Annotated, FrozenSet, List, Set, Literal, Optional
+from typing import Annotated, FrozenSet, Literal
 
 ##################################################
 ###                 Nifi Models                ###

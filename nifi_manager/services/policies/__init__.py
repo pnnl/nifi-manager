@@ -1,21 +1,17 @@
 # Functions
 from .policies import (
-    get_policy,
-    get_all_policies,
-    update_policy,
-    delete_policy,
-    create_policy,
+    sync_policy,
+    get_existing_policies,
+    del_non_acl_policies,
 )
 
 # Exceptions
 from .policies import PolicyNotCreated, PolicyExists, PolicyNotDeleted, PolicyNotUpdated
 
 __all__ = [
-    "get_policy",
-    "get_all_policies",
-    "update_policy",
-    "delete_policy",
-    "create_policy",
+    "sync_policy",
+    "get_existing_policies",
+    "del_non_acl_policies",
     "PolicyNotCreated",
     "PolicyExists",
     "PolicyNotDeleted",

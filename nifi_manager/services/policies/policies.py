@@ -1,6 +1,13 @@
 from pydantic import TypeAdapter
-from typing import FrozenSet
-from models import NifiPolicy, NifiPolicy, NifiMember, NifiMemberSet
+from typing import FrozenSet, List, Dict, Optional, Tuple
+from models import (
+    NifiPolicy,
+    NifiPolicy,
+    NifiMember,
+    NifiMemberSet,
+    Policy,
+    PolicyChange,
+)
 from config import Config, get_config
 from utils import get, post, put, delete
 import logging
@@ -31,7 +38,93 @@ class PolicyNotDeleted(Exception):
     pass
 
 
-def get_all_policies(root_pg_id: str) -> FrozenSet[NifiPolicy]:
+def get_existing_policies(root_pg_id: str) -> Dict[str, NifiPolicy]:
+    all_policies = _get_all_policies(root_pg_id)
+
+    policies = {}
+    for policy in all_policies:
+        policies[f"{policy.action}{policy.resource}"] = policy
+
+    return policies
+
+
+def sync_policy(
+    policy: Policy,
+    existing_policy: Optional[NifiPolicy],
+    user_list: FrozenSet[NifiMember],
+    group_list: FrozenSet[NifiMember],
+    dry_run: bool,
+) -> Tuple[Optional[NifiPolicy], Optional[PolicyChange]]:
+    try:
+        if not existing_policy:
+            change = PolicyChange(change="ADDED", policy=policy)
+            if dry_run:
+                logger.info(f"would create policy {policy.action} on {policy.resource}")
+                return existing_policy, change
+            created_policy = _create_policy(
+                policy.action,
+                policy.resource,
+                user_list,
+                group_list,
+            )
+            return created_policy, change
+
+        existing_users = frozenset(
+            {NifiMember(id=user.id) for user in existing_policy.users}
+        )
+        existing_groups = frozenset(
+            {NifiMember(id=group.id) for group in existing_policy.user_groups}
+        )
+
+        if existing_users != user_list or existing_groups != group_list:
+            change = PolicyChange(change="UPDATED", policy=policy)
+            if dry_run:
+                logger.info(f"would update policy {policy.action} on {policy.resource}")
+                return existing_policy, change
+
+            updated_policy = _update_policy(
+                existing_policy,
+                user_list,
+                group_list,
+            )
+            return updated_policy, change
+
+        return existing_policy, None
+    except PolicyNotCreated as e:
+        logger.warning(f"policy not created: {e}")
+        raise
+    except PolicyNotUpdated as e:
+        logger.warning(f"policy not updated: {e}")
+        raise
+    except PolicyExists:
+        logger.warning(
+            f"policy {policy.action} on {policy.resource} already exists but we tried to create it..."
+        )
+        raise
+
+
+def del_non_acl_policies(
+    to_delete: FrozenSet[NifiPolicy], dry_run: bool
+) -> Tuple[List[PolicyChange], List[Exception]]:
+    changes: List[PolicyChange] = []
+    failures: List[Exception] = []
+    for policy in to_delete:
+        try:
+            if dry_run:
+                logger.info(f"would delete policy {policy.action} on {policy.resource}")
+                continue
+
+            logger.info(f"deleting policy: {policy.action} on {policy.resource}")
+            change = _delete_policy(policy)
+            changes.append(change)
+        except Exception as e:
+            logger.warning(e)
+            raise
+
+    return changes, failures
+
+
+def _get_all_policies(root_pg_id: str) -> FrozenSet[NifiPolicy]:
     policy_resources = [
         "read/flow",
         "read/tenants",
@@ -66,7 +159,7 @@ def get_all_policies(root_pg_id: str) -> FrozenSet[NifiPolicy]:
         split = policy_resource.split("/", maxsplit=1)
         action, resource = split[0], split[1]
         try:
-            policy = get_policy(action, resource)
+            policy = _get_policy(action, resource)
             policies.append(policy)
         except PolicyNotExists:
             logger.warning(f"no policy for {action} on {resource}")
@@ -75,7 +168,7 @@ def get_all_policies(root_pg_id: str) -> FrozenSet[NifiPolicy]:
     return ta.validate_python(policies)
 
 
-def get_policy(action: str, resource: str) -> NifiPolicy:
+def _get_policy(action: str, resource: str) -> NifiPolicy:
     response = get(URL + f"/{action}/{resource}", CONFIG)
 
     status_code = response.status_code
@@ -87,7 +180,7 @@ def get_policy(action: str, resource: str) -> NifiPolicy:
         raise ValueError(f"response code not 200: {status_code}")
 
 
-def create_policy(
+def _create_policy(
     action: str,
     resource: str,
     users: FrozenSet[NifiMember],
@@ -99,7 +192,7 @@ def create_policy(
             "resource": f"/{resource}",
             "action": action,
             "users": NifiMemberSet.dump_python(users, mode="json"),
-            "userGroups": NifiMemberSet.dump_python(groups, mode="json"),
+            "userPolicys": NifiMemberSet.dump_python(groups, mode="json"),
         },
     }
     response = post(URL, CONFIG, payload)
@@ -120,9 +213,9 @@ def create_policy(
     )
 
 
-def update_policy(
+def _update_policy(
     policy: NifiPolicy, users: FrozenSet[NifiMember], groups: FrozenSet[NifiMember]
-) -> str:
+) -> NifiPolicy:
     payload = {
         "revision": {"version": policy.revision.version},
         "component": {
@@ -136,7 +229,12 @@ def update_policy(
 
     response = put(URL + f"/{policy.id}", CONFIG, payload)
     if response.status_code in (200, 201):
-        return response.json().get("id", "")
+        updated = NifiPolicy.model_validate_json(response.text)
+        if not updated:
+            raise PolicyNotCreated(
+                f"policy {policy.action} on {policy.resource} could not be created: {response.text}, status_code: {response.status_code}"
+            )
+        return policy
     elif response.status_code == 404:
         raise PolicyNotExists(
             f"policy {policy.action} on {policy.resource} does not exist"
@@ -146,8 +244,18 @@ def update_policy(
     )
 
 
-def delete_policy(policy: NifiPolicy):
+def _delete_policy(policy: NifiPolicy) -> PolicyChange:
     response = delete(URL + f"/{policy.id}?version={policy.revision.version}", CONFIG)
 
     if response.status_code != 200:
         raise PolicyNotDeleted(f"could not delete policy {policy.id}")
+
+    return PolicyChange(
+        change="REMOVED",
+        policy=Policy(
+            action=policy.action,
+            resource=policy.resource,
+            users=frozenset(),
+            groups=frozenset(),
+        ),
+    )

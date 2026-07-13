@@ -1,8 +1,11 @@
 from pydantic import TypeAdapter
-from typing import List
-from models import NifiUser
+from typing import FrozenSet, List, Dict, Optional, Tuple
+from models import NifiUser, User, UserChange
 from config import Config, get_config
 from utils import get, post, delete
+import logging
+
+logger = logging.getLogger("Policy Service")
 
 CONFIG: Config = get_config()
 URL = CONFIG.url + CONFIG.users_path
@@ -20,7 +23,65 @@ class UserNotDeleted(Exception):
     pass
 
 
-def get_all_users() -> List[NifiUser]:
+def get_existing_users() -> Dict[str, NifiUser]:
+    all_users = _get_all_users()
+
+    users = {}
+    for user in all_users:
+        users[user.identity] = user
+
+    return users
+
+
+def sync_user(
+    user: User,
+    existing_user: Optional[NifiUser],
+    dry_run: bool,
+) -> Tuple[Optional[NifiUser], Optional[UserChange]]:
+    try:
+        if not existing_user:
+            change = UserChange(change="ADDED", user=user)
+            if dry_run:
+                logger.info(f"would create user {user.identity}")
+                return existing_user, change
+            created_user = _create_user(
+                user.identity,
+            )
+            return created_user, change
+
+        return existing_user, None
+    except UserNotCreated as e:
+        logger.warning(f"user not created: {e}")
+        raise
+    except UserExists:
+        logger.warning(
+            f"user {user.identity} already exists but we tried to create it..."
+        )
+        raise
+
+
+def del_non_acl_users(
+    to_delete: FrozenSet[NifiUser], dry_run: bool
+) -> Tuple[List[UserChange], List[Exception]]:
+    changes: List[UserChange] = []
+    failures: List[Exception] = []
+    for user in to_delete:
+        try:
+            if dry_run:
+                logger.info(f"would delete user {user.identity}")
+                continue
+
+            logger.info(f"deleting user: {user.identity}")
+            change = _delete_user(user)
+            changes.append(change)
+        except Exception as e:
+            logger.warning(e)
+            raise
+
+    return changes, failures
+
+
+def _get_all_users() -> List[NifiUser]:
     response = get(URL, CONFIG)
     try:
         status_code = response.status_code
@@ -34,18 +95,7 @@ def get_all_users() -> List[NifiUser]:
         raise ValueError("something went wrong")
 
 
-def get_user(user_id: str) -> NifiUser:
-    response = get(URL + f"/{user_id}", CONFIG)
-    status_code = response.status_code
-    if status_code == 200:
-        return NifiUser.model_validate_json(response.text)
-    else:
-        raise ValueError(
-            f"could not get user {user_id}:\n\tresponse code not 200: {status_code}\n\tresponse: {response.text}"
-        )
-
-
-def create_user(identity: str) -> NifiUser:
+def _create_user(identity: str) -> NifiUser:
     payload = {"revision": {"version": 0}, "component": {"identity": identity}}
 
     response = post(URL, CONFIG, payload)
@@ -63,10 +113,17 @@ def create_user(identity: str) -> NifiUser:
     )
 
 
-def delete_user(user: NifiUser):
+def _delete_user(user: NifiUser):
     response = delete(URL + f"/{user.id}?version={user.revision.version}", CONFIG)
 
     if response.status_code != 200:
         raise UserNotDeleted(
             f"could not delete user {user.id}: {response.text}, status_code: {response.status_code}"
         )
+
+    return UserChange(
+        change="REMOVED",
+        user=User(
+            identity=user.identity,
+        ),
+    )
