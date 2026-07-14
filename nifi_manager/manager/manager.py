@@ -51,6 +51,10 @@ class GroupNotExists(Exception):
     pass
 
 
+class HealthcheckFailed(Exception):
+    pass
+
+
 class NifiManager:
     def __init__(self, config: Config, logger: logging.Logger):
         self.config = config
@@ -73,6 +77,7 @@ class NifiManager:
 
     def run(self) -> Tuple[List[Change], List[Exception]]:
         self.logger.debug(f"running script as: {self.current_username}")
+        self.healthcheck()
 
         self.root_pg_id = get_root_pg_id()
         self.logger.debug(f"found root process group id: {self.root_pg_id}")
@@ -119,7 +124,7 @@ class NifiManager:
             )
         except Exception as e:
             self.logger.error("healthcheck failed")
-            raise (e)
+            raise HealthcheckFailed(e)
 
     @staticmethod
     def _get_current_username(cert_path: Path):
