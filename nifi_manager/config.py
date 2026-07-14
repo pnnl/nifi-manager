@@ -24,7 +24,7 @@ class Config(BaseSettings):
     cert_path: str = "/etc/nifi-certs"
     verify: bool = True
 
-    log_level: LogLevel
+    log_level: LogLevel = "INFO"
 
     dry_run: bool = (
         Field(default=True, validation_alias="DRY_RUN")
@@ -63,5 +63,5 @@ class Config(BaseSettings):
 
 
 @lru_cache()
-def get_config():
+def get_config() -> Config:
     return Config()

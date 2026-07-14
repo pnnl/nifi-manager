@@ -20,6 +20,8 @@ from services.policies import (
     del_non_acl_policies,
 )
 from services.process_groups import get_root_pg_id
+from methods import health
+
 from pathlib import Path
 import json
 
@@ -38,6 +40,14 @@ from models import (
 
 
 class NoCurrentUser(Exception):
+    pass
+
+
+class UserNotExists(Exception):
+    pass
+
+
+class GroupNotExists(Exception):
     pass
 
 
@@ -99,6 +109,18 @@ class NifiManager:
 
         return self.changes, self.failures
 
+    def healthcheck(self) -> bool:
+        try:
+            return health(
+                self.config.url + self.config.users_path,
+                self.config.certs,
+                self.config.verify,
+                self.config.ca_cert_path,
+            )
+        except Exception as e:
+            self.logger.error("healthcheck failed")
+            raise (e)
+
     @staticmethod
     def _get_current_username(cert_path: Path):
         """build the DN of the cert used to authenticate with the NIFI API"""
@@ -133,10 +155,7 @@ class NifiManager:
         return NifiMember(id=resource.id)
 
     def _get_user_list(self, policy: Policy) -> FrozenSet[NifiMember]:
-        user_list = {
-            self._resource_to_member(self.users[user]) for user in policy.users
-        }
-
+        user_list = set(self._users_to_memberset(policy.users))
         # the following conditions ensure that the current user running this script will have the permissions needed to continue
         # this enforces the principle of least privilege and removes permissions from the "initial admin" that nifi sets that are now unnecessary
 
@@ -178,6 +197,38 @@ class NifiManager:
 
         return ExistingACL.model_validate(acl)
 
+    def _users_to_memberset(
+        self,
+        users: FrozenSet[str],
+    ) -> FrozenSet[NifiMember]:
+        member_set = set()
+        for user in users:
+            try:
+                member_set.add(self._resource_to_member(self.users[user]))
+            except KeyError:
+                if self.config.dry_run:
+                    member_set.add(NifiMember(id=user))
+                else:
+                    raise UserNotExists(f"could not find {user} in user list")
+
+        return frozenset(member_set)
+
+    def _groups_to_memberset(
+        self,
+        groups: FrozenSet[str],
+    ) -> FrozenSet[NifiMember]:
+        member_set = set()
+        for group in groups:
+            try:
+                member_set.add(self._resource_to_member(self.groups[group]))
+            except KeyError:
+                if self.config.dry_run:
+                    member_set.add(NifiMember(id=group))
+                else:
+                    raise GroupNotExists(f"could not find {group} in group list")
+
+        return frozenset(member_set)
+
     def sync_users(self):
         self.logger.debug(f"syncing users")
         synced_users = set()
@@ -214,9 +265,7 @@ class NifiManager:
         self.logger.debug(f"syncing groups")
         synced_groups = set()
         for group in self.acl.groups:
-            users = NifiMemberSet.validate_python(
-                {self._resource_to_member(self.users[user]) for user in group.users}
-            )
+            users = self._users_to_memberset(group.users)
             existing_group = self.existing_acl.groups.get(group.identity, None)
 
             try:
@@ -251,12 +300,7 @@ class NifiManager:
         synced_policies = set()
         for policy in self.acl.policies:
             user_list = self._get_user_list(policy)
-            group_list = frozenset(
-                {
-                    self._resource_to_member(self.groups[group])
-                    for group in policy.groups
-                }
-            )
+            group_list = self._groups_to_memberset(policy.groups)
             permission = f"{policy.action}/{policy.resource}"
 
             try:

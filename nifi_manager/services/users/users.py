@@ -2,7 +2,7 @@ from pydantic import TypeAdapter
 from typing import FrozenSet, List, Dict, Optional, Tuple
 from models import NifiUser, User, UserChange
 from config import Config, get_config
-from utils import get, post, delete
+from methods import get, post, delete
 import logging
 
 logger = logging.getLogger("Policy Service")
@@ -82,7 +82,7 @@ def del_non_acl_users(
 
 
 def _get_all_users() -> List[NifiUser]:
-    response = get(URL, CONFIG)
+    response = get(URL, CONFIG.certs, CONFIG.verify, CONFIG.ca_cert_path)
     try:
         status_code = response.status_code
         ta = TypeAdapter(List[NifiUser])
@@ -98,7 +98,7 @@ def _get_all_users() -> List[NifiUser]:
 def _create_user(identity: str) -> NifiUser:
     payload = {"revision": {"version": 0}, "component": {"identity": identity}}
 
-    response = post(URL, CONFIG, payload)
+    response = post(URL, CONFIG.certs, CONFIG.verify, CONFIG.ca_cert_path, payload)
     if response.status_code in (200, 201):
         user = NifiUser.model_validate_json(response.text)
         if not user:
@@ -114,7 +114,12 @@ def _create_user(identity: str) -> NifiUser:
 
 
 def _delete_user(user: NifiUser):
-    response = delete(URL + f"/{user.id}?version={user.revision.version}", CONFIG)
+    response = delete(
+        URL + f"/{user.id}?version={user.revision.version}",
+        CONFIG.certs,
+        CONFIG.verify,
+        CONFIG.ca_cert_path,
+    )
 
     if response.status_code != 200:
         raise UserNotDeleted(

@@ -8,7 +8,7 @@ from models import (
     GroupChange,
 )
 from config import Config, get_config
-from utils import get, post, put, delete
+from methods import get, post, put, delete
 import logging
 
 logger = logging.getLogger("Policy Service")
@@ -117,7 +117,7 @@ def del_non_acl_groups(
 
 
 def _get_all_groups() -> FrozenSet[NifiGroup]:
-    response = get(URL, CONFIG)
+    response = get(URL, CONFIG.certs, CONFIG.verify, CONFIG.ca_cert_path)
     try:
         status_code = response.status_code
         if status_code == 200:
@@ -140,7 +140,7 @@ def _create_group(identity: str, users: FrozenSet[NifiMember]) -> NifiGroup:
         },
     }
 
-    response = post(URL, CONFIG, payload)
+    response = post(URL, CONFIG.certs, CONFIG.verify, CONFIG.ca_cert_path, payload)
     if response.status_code in (200, 201):
         return NifiGroup.model_validate_json(response.text)
     elif response.status_code == 409:
@@ -161,7 +161,9 @@ def _update_group(group: NifiGroup, users: FrozenSet[NifiMember]) -> NifiGroup:
         },
     }
 
-    response = put(URL + f"/{group.id}", CONFIG, payload)
+    response = put(
+        URL + f"/{group.id}", CONFIG.certs, CONFIG.verify, CONFIG.ca_cert_path, payload
+    )
     if response.status_code in (200, 201):
         return NifiGroup.model_validate_json(response.text)
     elif response.status_code == 404:
@@ -173,7 +175,12 @@ def _update_group(group: NifiGroup, users: FrozenSet[NifiMember]) -> NifiGroup:
 
 
 def _delete_group(group: NifiGroup) -> GroupChange:
-    response = delete(URL + f"/{group.id}?version={group.revision.version}", CONFIG)
+    response = delete(
+        URL + f"/{group.id}?version={group.revision.version}",
+        CONFIG.certs,
+        CONFIG.verify,
+        CONFIG.ca_cert_path,
+    )
 
     if response.status_code != 200:
         raise GroupNotDeleted(f"could not delete group {group.id}")

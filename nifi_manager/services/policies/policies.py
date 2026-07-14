@@ -1,4 +1,5 @@
 from pydantic import TypeAdapter
+from requests.exceptions import HTTPError
 from typing import FrozenSet, List, Dict, Optional, Tuple
 from models import (
     NifiPolicy,
@@ -9,7 +10,7 @@ from models import (
     PolicyChange,
 )
 from config import Config, get_config
-from utils import get, post, put, delete
+from methods import get, post, put, delete
 import logging
 
 logger = logging.getLogger("Policy Service")
@@ -167,15 +168,25 @@ def _get_all_policies(root_pg_id: str) -> FrozenSet[NifiPolicy]:
 
 
 def _get_policy(action: str, resource: str) -> NifiPolicy:
-    response = get(URL + f"/{action}/{resource}", CONFIG)
+    try:
+        response = get(
+            URL + f"/{action}/{resource}",
+            CONFIG.certs,
+            CONFIG.verify,
+            CONFIG.ca_cert_path,
+        )
 
-    status_code = response.status_code
-    if status_code == 200:
-        return NifiPolicy.model_validate_json(response.text)
-    elif status_code == 404:
-        raise PolicyNotExists(f"policy not found")
-    else:
-        raise ValueError(f"response code not 200: {status_code}")
+        status_code = response.status_code
+        if status_code == 200:
+            return NifiPolicy.model_validate_json(response.text)
+        elif status_code == 404:
+            raise PolicyNotExists(f"policy not found")
+        else:
+            raise ValueError(f"response code not 200: {status_code}")
+    except HTTPError as e:
+        if e.response.status_code == 404:
+            raise PolicyNotExists(f"policy not found")
+        raise
 
 
 def _create_policy(
@@ -193,7 +204,7 @@ def _create_policy(
             "userGroups": NifiMemberSet.dump_python(groups, mode="json"),
         },
     }
-    response = post(URL, CONFIG, payload)
+    response = post(URL, CONFIG.certs, CONFIG.verify, CONFIG.ca_cert_path, payload)
 
     if response.status_code in (200, 201):
         policy = NifiPolicy.model_validate_json(response.text)
@@ -225,7 +236,9 @@ def _update_policy(
         },
     }
 
-    response = put(URL + f"/{policy.id}", CONFIG, payload)
+    response = put(
+        URL + f"/{policy.id}", CONFIG.certs, CONFIG.verify, CONFIG.ca_cert_path, payload
+    )
     if response.status_code in (200, 201):
         updated = NifiPolicy.model_validate_json(response.text)
         if not updated:
@@ -243,7 +256,12 @@ def _update_policy(
 
 
 def _delete_policy(policy: NifiPolicy) -> PolicyChange:
-    response = delete(URL + f"/{policy.id}?version={policy.revision.version}", CONFIG)
+    response = delete(
+        URL + f"/{policy.id}?version={policy.revision.version}",
+        CONFIG.certs,
+        CONFIG.verify,
+        CONFIG.ca_cert_path,
+    )
 
     if response.status_code != 200:
         raise PolicyNotDeleted(f"could not delete policy {policy.id}")
