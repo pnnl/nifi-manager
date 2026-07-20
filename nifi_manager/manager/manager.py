@@ -40,7 +40,7 @@ from models import (
 )
 
 
-class NoCurrentUser(Exception):
+class NoScriptUser(Exception):
     pass
 
 
@@ -66,7 +66,7 @@ class NifiManager:
         self.changes: List[Change] = []
 
         # username of the authenticated user running the script
-        self.script_username = self._get_current_username(
+        self.script_username = self._get_script_username(
             Path(self.config.cert_path) / "tls.crt"
         )
 
@@ -104,7 +104,7 @@ class NifiManager:
         try:
             self.script_user: NifiUser = self.users[self.script_username]
         except KeyError as e:
-            raise NoCurrentUser(f"User {self.script_username} not found") from e
+            raise NoScriptUser(f"User {self.script_username} not found") from e
 
         self.cluster_users: FrozenSet[str] = self._get_cluster_users()
         self.logger.debug(
@@ -133,7 +133,7 @@ class NifiManager:
             raise HealthcheckFailed(e) from e
 
     @staticmethod
-    def _get_current_username(cert_path: Path):
+    def _get_script_username(cert_path: Path):
         """build the DN of the cert used to authenticate with the NIFI API"""
         # We use mTLS to authenticate with the NIFI API
         # The DN of our cert has to be added in NIFI as a user prior to using this script
@@ -150,7 +150,10 @@ class NifiManager:
         )
         ou_value = org_units[0].value if org_units else None
 
-        return f"CN={cn_value}, OU={ou_value}"
+        if cn_value and ou_value:
+            return f"CN={cn_value}, OU={ou_value}"
+        else:
+            raise NoScriptUser(f"could not generate script user from the provided cert")
 
     def _get_cluster_users(self) -> FrozenSet[str]:
         cluster_users = set()
