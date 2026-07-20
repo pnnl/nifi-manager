@@ -191,7 +191,7 @@ class NifiManager:
 
     def _read_acl_file(self, path: Path) -> ACLList:
         """reads the user provided acl list"""
-        with path.open("r") as file:
+        with path.open("r", encoding="utf-8") as file:
             content = file.read()
             content = content.replace("{root_pg_id}", self.root_pg_id)
 
@@ -229,7 +229,7 @@ class NifiManager:
 
         return frozenset(member_set)
 
-    def sync_users(self):
+    def sync_users(self) -> None:
         self.logger.debug("syncing users")
         synced_users = set()
         desired_users = set(self.acl.users)
@@ -255,7 +255,7 @@ class NifiManager:
 
         desired_usernames = {user.identity for user in desired_users}
         sync_errors = desired_usernames - synced_users
-        if len(sync_errors) != 0:
+        if sync_errors:
             self.logger.info("unable to sync: ", sync_errors)
 
         to_delete = set(self.users.keys()) - desired_usernames
@@ -268,7 +268,7 @@ class NifiManager:
             self.changes += changes
             self.failures += failures
 
-    def sync_groups(self):
+    def sync_groups(self) -> None:
         self.logger.debug("syncing groups")
         synced_groups = set()
         for group in self.acl.groups:
@@ -294,7 +294,7 @@ class NifiManager:
         desired_groups = {group.identity for group in self.acl.groups}
 
         sync_errors = desired_groups - synced_groups
-        if len(sync_errors) != 0:
+        if sync_errors:
             self.logger.info("unable to sync: ", list(sync_errors))
 
         to_delete = set(self.groups.keys()) - desired_groups
@@ -368,7 +368,7 @@ class NifiManager:
 
         return desired
 
-    def sync_policies(self):
+    def sync_policies(self) -> None:
         self.logger.debug("syncing policies")
         synced_policies = set()
 
@@ -377,7 +377,6 @@ class NifiManager:
             try:
                 user_list = self._get_user_list(policy)
                 group_list = self._groups_to_memberset(policy.groups)
-                permission = get_permission(policy.action, policy.resource)
 
                 synced, change = sync_policy(
                     policy,
@@ -398,7 +397,7 @@ class NifiManager:
                 self.failures.append(e)
 
         sync_errors = desired.keys() - synced_policies
-        if len(sync_errors) != 0:
+        if sync_errors:
             self.logger.info(f"unable to sync: {list(sync_errors)}")
 
         to_delete = set(self.policies.keys()) - set(desired.keys())
