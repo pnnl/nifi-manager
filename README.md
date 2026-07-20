@@ -661,48 +661,6 @@ Treat dry-run output as a deployment approval artifact. Review all removals befo
 
 ---
 
-## Development
-
-### Formatting
-
-Recommended tools:
-
-```bash
-pip install black ruff
-black .
-ruff check .
-```
-
-### Type checking
-
-```bash
-pip install mypy
-mypy .
-```
-
-### Testing
-
-```bash
-pip install pytest
-pytest
-```
-
-Tests should cover at least:
-
-- Policy resource normalization
-- Permission-key generation
-- ACL validation
-- Duplicate policy detection
-- User and group membership conversion
-- Dry-run additions, updates, and removals
-- Essential policy synthesis
-- Protected-user pruning
-- HTTP error translation
-- Optimistic-lock revision handling
-- Reconciliation and pruning order
-
----
-
 ## Example reconciliation
 
 Given this desired policy:
