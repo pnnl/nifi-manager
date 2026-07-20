@@ -178,12 +178,8 @@ class NifiManager:
             if policy.action == "read":
                 user_list.add(self._resource_to_member(self.script_user))
 
-        # read/write on tenants (users and groups)
-        if policy.resource == "/tenants":
-            user_list.add(self._resource_to_member(self.script_user))
-
-        # read/write on policies
-        if policy.resource == "/policies":
+        # read/write on tenants (users and groups) and policies
+        if policy.resource in {"/tenants", "/policies"}:
             user_list.add(self._resource_to_member(self.script_user))
 
         # write on proxy is needed for all cluster users
@@ -198,9 +194,8 @@ class NifiManager:
         with path.open("r") as file:
             content = file.read()
             content = content.replace("{root_pg_id}", self.root_pg_id)
-            acl_json = json.loads(content)
 
-        return ACLList.model_validate_json(json.dumps(acl_json))
+        return ACLList.model_validate_json(json.loads(content))
 
     def _users_to_memberset(
         self,
