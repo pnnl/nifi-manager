@@ -193,10 +193,4 @@ def _delete_group(group: NifiGroup) -> GroupChange:
     if response.status_code != 200:
         raise GroupNotDeleted(f"could not delete group {group.id}")
 
-    return GroupChange(
-        change="REMOVED",
-        group=Group(
-            identity=group.identity,
-            users=frozenset(),
-        ),
-    )
+    return _get_group_removal_change(group)

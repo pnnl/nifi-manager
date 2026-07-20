@@ -234,6 +234,9 @@ class NifiManager:
         synced_users = set()
         desired_users = set(self.acl.users)
         desired_users.add(User(identity=self.script_username))
+        desired_users.update(
+            {User(identity=cluster_user) for cluster_user in self.cluster_users}
+        )
 
         for user in desired_users:
             existing_user = self.users.get(user.identity, None)

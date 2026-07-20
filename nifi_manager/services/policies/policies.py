@@ -181,7 +181,7 @@ def _get_all_policies(root_pg_id: str) -> FrozenSet[NifiPolicy]:
             policy = _get_policy(action, resource)
             policies.append(policy)
         except PolicyNotExists:
-            logger.warning(f"no policy for {action} on {resource}")
+            logger.debug(f"no policy for {action} on {resource}")
 
     ta = TypeAdapter(FrozenSet[NifiPolicy])
     return ta.validate_python(policies)

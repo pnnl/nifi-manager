@@ -1,11 +1,12 @@
 READEME.md 
+**/acl.json
 
 .gitignore
 .git
 .github
 
 # Ignore local environment variables and secrets
-.env
+**/.env
 *.local
 secrets.txt
 

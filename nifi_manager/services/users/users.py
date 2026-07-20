@@ -134,4 +134,4 @@ def _delete_user(user: NifiUser):
             f"could not delete user {user.id}: {response.text}, status_code: {response.status_code}"
         )
 
-    return _get_user_removal_change()
+    return _get_user_removal_change(user)

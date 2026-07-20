@@ -15,6 +15,6 @@ def get_root_pg_id() -> str:
         root_pg_id = r["processGroupFlow"]["id"]
         return root_pg_id
 
-    except Exception:
-        logger.error("could not get root_pg_id")
+    except Exception as e:
+        logger.error("could not get root_pg_id: ", e)
         raise
