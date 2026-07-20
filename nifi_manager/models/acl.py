@@ -1,12 +1,9 @@
 """Pydantic models to verify input and output of this script"""
 
-from pydantic import BaseModel, BeforeValidator, field_validator
-from typing import FrozenSet, Dict, Annotated, Literal
+from pydantic import BaseModel, field_validator
+from typing import FrozenSet, Annotated, Literal
 from .nifi_models import (
-    NifiGroup,
-    NifiPolicy,
     NifiPolicyAction,
-    NifiUser,
     APIPolicyResource,
 )
 

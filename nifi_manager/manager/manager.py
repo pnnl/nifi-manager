@@ -195,7 +195,7 @@ class NifiManager:
             content = file.read()
             content = content.replace("{root_pg_id}", self.root_pg_id)
 
-        return ACLList.model_validate_json(json.loads(content))
+        return ACLList.model_validate(json.loads(content))
 
     def _users_to_memberset(
         self,

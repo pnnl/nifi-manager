@@ -12,7 +12,7 @@ LogLevel = Annotated[
 
 
 class Config(BaseSettings):
-    host: str = "localhost:8443"
+    host: str = "localhost"
     port: int = 8443
     api_path: str = "nifi-api"
     users_path: str = "tenants/users"
@@ -57,7 +57,7 @@ class Config(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        env_prefix="NIFI_",
+        env_prefix="NIFI_MANAGER_",
         case_sensitive=False,
     )
 
