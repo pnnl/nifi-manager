@@ -1,0 +1,21 @@
+READEME.md 
+
+.gitignore
+.git
+
+# Ignore local environment variables and secrets
+.env
+*.local
+secrets.txt
+
+# Ignore dependencies (let Docker install them inside the container)
+node_modules/
+vendor/
+.venv/
+ENV/
+
+# Ignore build outputs and cache
+dist/
+build/
+*.pyc
+__pycache__/
