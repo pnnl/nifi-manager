@@ -2,6 +2,7 @@ READEME.md
 
 .gitignore
 .git
+.github
 
 # Ignore local environment variables and secrets
 .env
