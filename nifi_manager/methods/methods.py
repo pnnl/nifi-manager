@@ -80,7 +80,7 @@ def health(
     certs: Optional[Tuple[str, str]],
     verify: bool,
     ca_cert_path: Optional[str],
-) -> bool:
+):
     response = get(url, certs, verify, ca_cert_path)
     response.raise_for_status()
 
@@ -89,5 +89,3 @@ def health(
         response.raise_for_status()
 
         time.sleep(5)
-
-    return True

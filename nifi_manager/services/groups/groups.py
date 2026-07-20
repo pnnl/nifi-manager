@@ -104,6 +104,7 @@ def del_non_acl_groups(
         try:
             if dry_run:
                 logger.info(f"would delete group {group.identity}")
+                changes.append(_get_group_removal_change(group))
                 continue
 
             logger.info(f"deleting group: {group.identity}")
@@ -114,6 +115,13 @@ def del_non_acl_groups(
             failures.append(e)
 
     return changes, failures
+
+
+def _get_group_removal_change(group: NifiGroup) -> GroupChange:
+    return GroupChange(
+        change="REMOVED",
+        group=Group(identity=group.identity, users=frozenset()),
+    )
 
 
 def _get_all_groups() -> FrozenSet[NifiGroup]:

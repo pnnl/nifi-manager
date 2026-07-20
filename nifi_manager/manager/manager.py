@@ -18,6 +18,7 @@ from services.policies import (
     sync_policy,
     get_existing_policies,
     del_non_acl_policies,
+    get_permission,
 )
 from services.process_groups import get_root_pg_id
 from methods import health
@@ -27,10 +28,10 @@ import json
 
 from models import (
     ACLList,
-    ExistingACL,
     NifiUser,
     NifiGroup,
     NifiPolicy,
+    User,
     Policy,
     NifiResource,
     NifiMember,
@@ -64,42 +65,47 @@ class NifiManager:
         )  # keep a list of all failures to print out at the end
         self.changes: List[Change] = []
 
-        self.current_username = self._get_current_username(
+        # username of the authenticated user running the script
+        self.script_username = self._get_current_username(
             Path(self.config.cert_path) / "tls.crt"
         )
 
+        self.users: Dict[str, NifiUser]
+        self.groups: Dict[str, NifiGroup]
+        self.policies: Dict[str, NifiPolicy]
+
         if self.config.dry_run:
-            self.logger.info(f"running in DRY_RUN mode - no changes will be made")
+            self.logger.info("running in DRY_RUN mode - no changes will be made")
         if self.config.prune:
             self.logger.warning(
-                f"running with prune enabled - users, groups, and policies not in the acl will be deleted"
+                "running with prune enabled - users, groups, and policies not in the acl will be deleted"
             )
 
     def run(self) -> Tuple[List[Change], List[Exception]]:
-        self.logger.debug(f"running script as: {self.current_username}")
+        self.logger.debug(f"running script as: {self.script_username}")
         self.healthcheck()
 
         self.root_pg_id = get_root_pg_id()
         self.logger.debug(f"found root process group id: {self.root_pg_id}")
 
-        self.logger.debug(f"pulling existing users")
-        self.users: Dict[str, NifiUser] = get_existing_users()
-        self.logger.debug(f"found {len(self.users.keys())} existing users")
+        self.logger.debug("pulling existing users")
+        self.users = get_existing_users()
+        self.logger.debug(f"found {len(self.users)} existing users")
 
-        self.logger.debug(f"pulling existing groups")
-        self.groups: Dict[str, NifiGroup] = get_existing_groups()
-        self.logger.debug(f"found {len(self.groups.keys())} existing groups")
+        self.logger.debug("pulling existing groups")
+        self.groups = get_existing_groups()
+        self.logger.debug(f"found {len(self.groups)} existing groups")
 
-        self.logger.debug(f"pulling existing policies")
-        self.policies: Dict[str, NifiPolicy] = get_existing_policies(self.root_pg_id)
-        self.logger.debug(f"found {len(self.policies.keys())} existing policies")
-        self.logger.debug(f"building existing acl")
-        self.existing_acl = self._get_existing_acl()
+        self.logger.debug("pulling existing policies")
+        self.policies = get_existing_policies(self.root_pg_id)
+        self.logger.debug(f"found {len(self.policies)} existing policies")
+        self.logger.debug("building existing acl")
 
         try:
-            self.current_user: NifiUser = self.users[self.current_username]
-        except KeyError:
-            raise NoCurrentUser(f"User {self.current_username} not found")
+            self.script_user: NifiUser = self.users[self.script_username]
+        except KeyError as e:
+            raise NoCurrentUser(f"User {self.script_username} not found") from e
+
         self.cluster_users: FrozenSet[str] = self._get_cluster_users()
         self.logger.debug(
             f"found cluster users: {[user for user in self.cluster_users]}"
@@ -114,9 +120,9 @@ class NifiManager:
 
         return self.changes, self.failures
 
-    def healthcheck(self) -> bool:
+    def healthcheck(self):
         try:
-            return health(
+            health(
                 self.config.url + self.config.users_path,
                 self.config.certs,
                 self.config.verify,
@@ -124,7 +130,7 @@ class NifiManager:
             )
         except Exception as e:
             self.logger.error("healthcheck failed")
-            raise HealthcheckFailed(e)
+            raise HealthcheckFailed(e) from e
 
     @staticmethod
     def _get_current_username(cert_path: Path):
@@ -150,7 +156,7 @@ class NifiManager:
         cluster_users = set()
 
         for user in self.users.keys():
-            if "OU=NIFI" in user and user != self.current_username:
+            if "OU=NIFI" in user and user != self.script_username:
                 cluster_users.add(user)
 
         return frozenset(cluster_users)
@@ -165,20 +171,20 @@ class NifiManager:
         # this enforces the principle of least privilege and removes permissions from the "initial admin" that nifi sets that are now unnecessary
 
         # read on the flow
-        if policy.resource == "flow":
+        if policy.resource == "/flow":
             if policy.action == "read":
-                user_list.add(self._resource_to_member(self.current_user))
+                user_list.add(self._resource_to_member(self.script_user))
 
         # read/write on tenants (users and groups)
-        if policy.resource == "tenants":
-            user_list.add(self._resource_to_member(self.current_user))
+        if policy.resource == "/tenants":
+            user_list.add(self._resource_to_member(self.script_user))
 
         # read/write on policies
-        if policy.resource == "policies":
-            user_list.add(self._resource_to_member(self.current_user))
+        if policy.resource == "/policies":
+            user_list.add(self._resource_to_member(self.script_user))
 
         # write on proxy is needed for all cluster users
-        if policy.resource == "proxy":
+        if policy.resource == "/proxy":
             for cluster_user in self.cluster_users:
                 user_list.add(self._resource_to_member(self.users[cluster_user]))
 
@@ -192,15 +198,6 @@ class NifiManager:
             acl_json = json.loads(content)
 
         return ACLList.model_validate_json(json.dumps(acl_json))
-
-    def _get_existing_acl(self) -> ExistingACL:
-        acl = {}
-
-        acl["users"] = self.users
-        acl["groups"] = self.groups
-        acl["policies"] = self.policies
-
-        return ExistingACL.model_validate(acl)
 
     def _users_to_memberset(
         self,
@@ -235,10 +232,13 @@ class NifiManager:
         return frozenset(member_set)
 
     def sync_users(self):
-        self.logger.debug(f"syncing users")
+        self.logger.debug("syncing users")
         synced_users = set()
-        for user in self.acl.users:
-            existing_user = self.existing_acl.users.get(user.identity, None)
+        desired_users = set(self.acl.users)
+        desired_users.add(User(identity=self.script_username))
+
+        for user in desired_users:
+            existing_user = self.users.get(user.identity, None)
 
             try:
                 synced, change = sync_user(
@@ -246,17 +246,21 @@ class NifiManager:
                     existing_user,
                     self.config.dry_run,
                 )
-                if synced:
-                    self.users[user.identity] = synced
-                    synced_users.add(user.identity)
                 if change:
                     self.changes.append(change)
+                if synced:
+                    self.users[user.identity] = synced
 
+                synced_users.add(user.identity)
             except Exception as e:
                 self.failures.append(e)
 
-        to_delete = set(self.users.keys()) - synced_users
+        desired_usernames = {user.identity for user in desired_users}
+        sync_errors = desired_usernames - synced_users
+        if len(sync_errors) != 0:
+            self.logger.info("unable to sync: ", sync_errors)
 
+        to_delete = set(self.users.keys()) - desired_usernames
         if self.config.prune:
             changes, failures = del_non_acl_users(
                 frozenset({self.users[username] for username in to_delete}),
@@ -267,30 +271,35 @@ class NifiManager:
             self.failures += failures
 
     def sync_groups(self):
-        self.logger.debug(f"syncing groups")
+        self.logger.debug("syncing groups")
         synced_groups = set()
         for group in self.acl.groups:
-            users = self._users_to_memberset(group.users)
-            existing_group = self.existing_acl.groups.get(group.identity, None)
-
             try:
+                users = self._users_to_memberset(group.users)
+                existing_group = self.groups.get(group.identity, None)
+
                 synced, change = sync_group(
                     group,
                     existing_group,
                     users,
                     self.config.dry_run,
                 )
-                if synced:
-                    self.groups[group.identity] = synced
-                    synced_groups.add(group.identity)
                 if change:
                     self.changes.append(change)
+                if synced:
+                    self.groups[group.identity] = synced
 
+                synced_groups.add(group.identity)
             except Exception as e:
                 self.failures.append(e)
 
-        to_delete = set(self.groups.keys()) - synced_groups
+        desired_groups = {group.identity for group in self.acl.groups}
 
+        sync_errors = desired_groups - synced_groups
+        if len(sync_errors) != 0:
+            self.logger.info("unable to sync: ", list(sync_errors))
+
+        to_delete = set(self.groups.keys()) - desired_groups
         if self.config.prune:
             changes, failures = del_non_acl_groups(
                 frozenset({self.groups[groupname] for groupname in to_delete}),
@@ -300,33 +309,101 @@ class NifiManager:
             self.changes += changes
             self.failures += failures
 
-    def sync_policies(self):
-        self.logger.debug(f"syncing policies")
-        synced_policies = set()
-        for policy in self.acl.policies:
-            user_list = self._get_user_list(policy)
-            group_list = self._groups_to_memberset(policy.groups)
-            permission = f"{policy.action}/{policy.resource}"
+    def _get_desired_policies(self) -> Dict[str, Policy]:
+        desired = {
+            get_permission(policy.action, policy.resource): policy
+            for policy in self.acl.policies
+        }
+        minimum = [
+            Policy(
+                action="read",
+                resource="/flow",
+                users=frozenset({self.script_user.identity}),
+                groups=frozenset(),
+            ),
+            Policy(
+                action="read",
+                resource="/tenants",
+                users=frozenset({self.script_user.identity}),
+                groups=frozenset(),
+            ),
+            Policy(
+                action="write",
+                resource="/tenants",
+                users=frozenset({self.script_user.identity}),
+                groups=frozenset(),
+            ),
+            Policy(
+                action="read",
+                resource="/policies",
+                users=frozenset({self.script_user.identity}),
+                groups=frozenset(),
+            ),
+            Policy(
+                action="write",
+                resource="/policies",
+                users=frozenset({self.script_user.identity}),
+                groups=frozenset(),
+            ),
+        ]
+        if self.cluster_users:
+            minimum.append(
+                Policy(
+                    action="write",
+                    resource="/proxy",
+                    users=frozenset(
+                        {
+                            self.users[cluster_user].identity
+                            for cluster_user in self.cluster_users
+                        }
+                    ),
+                    groups=frozenset(),
+                ),
+            )
 
+        for policy in minimum:
+            permission = get_permission(
+                policy.action,
+                policy.resource,
+            )
+            desired.setdefault(permission, policy)
+
+        return desired
+
+    def sync_policies(self):
+        self.logger.debug("syncing policies")
+        synced_policies = set()
+
+        desired = self._get_desired_policies()
+        for permission, policy in desired.items():
             try:
+                user_list = self._get_user_list(policy)
+                group_list = self._groups_to_memberset(policy.groups)
+                permission = get_permission(policy.action, policy.resource)
+
                 synced, change = sync_policy(
                     policy,
-                    self.existing_acl.policies.get(permission, None),
+                    self.policies.get(permission, None),
                     user_list,
                     group_list,
                     self.config.dry_run,
                 )
-                if synced:
-                    self.policies[permission] = synced
-                    synced_policies.add(permission)
                 if change:
                     self.changes.append(change)
+
+                if synced is not None:
+                    self.policies[permission] = synced
+
+                synced_policies.add(permission)
 
             except Exception as e:
                 self.failures.append(e)
 
-        to_delete = set(self.policies.keys()) - synced_policies
+        sync_errors = desired.keys() - synced_policies
+        if len(sync_errors) != 0:
+            self.logger.info(f"unable to sync: {list(sync_errors)}")
 
+        to_delete = set(self.policies.keys()) - set(desired.keys())
         if self.config.prune:
             changes, failures = del_non_acl_policies(
                 frozenset({self.policies[permission] for permission in to_delete}),

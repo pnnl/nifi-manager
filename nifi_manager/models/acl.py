@@ -2,7 +2,13 @@
 
 from pydantic import BaseModel, BeforeValidator, field_validator
 from typing import FrozenSet, Dict, Annotated, Literal
-from .nifi_models import NifiGroup, NifiPolicy, NifiPolicyAction, NifiUser
+from .nifi_models import (
+    NifiGroup,
+    NifiPolicy,
+    NifiPolicyAction,
+    NifiUser,
+    APIPolicyResource,
+)
 
 ##################################################
 ###              Function Models               ###
@@ -10,7 +16,7 @@ from .nifi_models import NifiGroup, NifiPolicy, NifiPolicyAction, NifiUser
 
 
 class Policy(BaseModel, frozen=True):
-    resource: str
+    resource: APIPolicyResource
     action: NifiPolicyAction
     users: FrozenSet[str]
     groups: FrozenSet[str]
@@ -38,17 +44,10 @@ class ACLList(BaseModel, frozen=True):
     policies: FrozenSet[Policy]
 
 
-class ExistingACL(BaseModel):
-    users: Dict[str, NifiUser]
-    groups: Dict[str, NifiGroup]
-    policies: Dict[str, NifiPolicy]
-
-
 _changes = Literal["ADDED", "REMOVED", "UPDATED"]
 ChangeEffect = Annotated[
     _changes,
     "list of effects of a change that can occur in the ACL",
-    BeforeValidator(lambda c: c if isinstance(c, str) else c),
 ]
 
 

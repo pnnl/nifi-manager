@@ -9,10 +9,10 @@ from .nifi_models import (
     NifiPolicySet,
     NifiMemberSet,
     NifiPolicyAction,
+    resource_to_member,
 )
 from .acl import (
     ACLList,
-    ExistingACL,
     User,
     Group,
     Policy,
@@ -38,6 +38,7 @@ __all__ = [
     "NifiGroupSet",
     "NifiPolicySet",
     "NifiMemberSet",
+    "resource_to_member",
     "UserChange",
     "GroupChange",
     "PolicyChange",

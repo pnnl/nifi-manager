@@ -5,7 +5,7 @@ from config import Config, get_config
 from methods import get, post, delete
 import logging
 
-logger = logging.getLogger("Policy Service")
+logger = logging.getLogger("User Service")
 
 CONFIG: Config = get_config()
 URL = CONFIG.url + CONFIG.users_path
@@ -69,6 +69,7 @@ def del_non_acl_users(
         try:
             if dry_run:
                 logger.info(f"would delete user {user.identity}")
+                changes.append(_get_user_removal_change(user))
                 continue
 
             logger.info(f"deleting user: {user.identity}")
@@ -79,6 +80,13 @@ def del_non_acl_users(
             raise
 
     return changes, failures
+
+
+def _get_user_removal_change(user: NifiUser) -> UserChange:
+    return UserChange(
+        change="REMOVED",
+        user=User(identity=user.identity),
+    )
 
 
 def _get_all_users() -> List[NifiUser]:
@@ -126,9 +134,4 @@ def _delete_user(user: NifiUser):
             f"could not delete user {user.id}: {response.text}, status_code: {response.status_code}"
         )
 
-    return UserChange(
-        change="REMOVED",
-        user=User(
-            identity=user.identity,
-        ),
-    )
+    return _get_user_removal_change()

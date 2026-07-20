@@ -11,6 +11,25 @@ from pydantic import (
 from typing import Annotated, FrozenSet, Literal
 
 ##################################################
+###                 Validation                 ###
+##################################################
+
+
+def _ensure_leading_slash(resource: str) -> str:
+    stripped = resource.strip().lstrip("/")
+    if not stripped:
+        raise ValueError("policy resource cannot be empty")
+    return f"/{stripped}"
+
+
+APIPolicyResource = Annotated[
+    str,
+    "ensure that the resource object always begins with '/'",
+    BeforeValidator(_ensure_leading_slash),
+]
+
+
+##################################################
 ###                 Nifi Models                ###
 ##################################################
 
@@ -47,7 +66,6 @@ class NifiMember(BaseModel, frozen=True):
 _nifi_actions = Literal["read", "write"]
 NifiPolicyAction = Annotated[
     _nifi_actions,
-    BeforeValidator(lambda a: a if isinstance(a, str) else a),
     "self-validating class for allowed actions in nifi policy list",
 ]
 
@@ -73,7 +91,9 @@ class NifiUser(NifiResource, frozen=True):
 class NifiPolicy(NifiResource, frozen=True):
     """NiFi Access Policy entity"""
 
-    resource: str = Field(validation_alias=AliasPath("component", "resource"))
+    resource: APIPolicyResource = Field(
+        validation_alias=AliasPath("component", "resource")
+    )
     action: NifiPolicyAction = Field(validation_alias=AliasPath("component", "action"))
     users: FrozenSet[NifiUser] = Field(validation_alias=AliasPath("component", "users"))
     user_groups: FrozenSet[NifiGroup] = Field(
@@ -81,6 +101,10 @@ class NifiPolicy(NifiResource, frozen=True):
     )
 
     model_config = ConfigDict(populate_by_name=True)
+
+
+def resource_to_member(resource: NifiResource) -> NifiMember:
+    return NifiMember(id=resource.id)
 
 
 NifiUserSet = TypeAdapter(FrozenSet[NifiUser])
