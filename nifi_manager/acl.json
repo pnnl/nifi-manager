@@ -1,16 +1,16 @@
 {
   "users": [
     {
-      "identity": "Timothy J Cain"
+      "identity": "John Smith"
     },
     {
-      "identity": "Jane Smith"
+      "identity": "Jane Doe"
     }
   ],
   "groups": [
     {
       "identity": "administrators",
-      "users": ["Timothy J Cain"]
+      "users": ["John Smith"]
     },
     {
       "identity": "developers",
@@ -26,6 +26,7 @@
     }
   ],
   "policies": [
+    {"resource": "/flow", "action": "read", "users": ["Jane Smith"], "groups": ["administrators"]},
     {"resource": "/tenants", "action": "read", "users": ["Jane Smith"], "groups": ["administrators"]},
     {"resource": "/tenants", "action": "write", "users": ["Jane Smith"], "groups": ["administrators"]},
     {"resource": "/policies", "action": "read", "users": ["Jane Smith"], "groups": ["administrators"]},
